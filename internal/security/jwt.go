@@ -11,8 +11,8 @@ import (
 
 type Claims struct {
 	UserID uuid.UUID `json:"user_id"`
-	Email  string    `json:"email"`
-	Role   string    `json:"role"`
+	Email  string    `json:"email,omitempty"`
+	Role   string    `json:"role,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -34,12 +34,15 @@ func NewJWTManager() *JWTManager {
 	}
 }
 
-func (m *JWTManager) GenerateAccessToken(userID uuid.UUID, email, role string) (string, error) {
+// GenerateAccessToken returns (tokenString, jti, error).
+func (m *JWTManager) GenerateAccessToken(userID uuid.UUID, email, role string) (string, string, error) {
+	jti := uuid.New().String()
 	claims := &Claims{
 		UserID: userID,
 		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.accessTokenExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "security-service",
@@ -47,13 +50,20 @@ func (m *JWTManager) GenerateAccessToken(userID uuid.UUID, email, role string) (
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(m.secretKey)
+	signed, err := token.SignedString(m.secretKey)
+	if err != nil {
+		return "", "", err
+	}
+	return signed, jti, nil
 }
 
-func (m *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
+// GenerateRefreshToken returns (tokenString, jti, error).
+func (m *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, string, error) {
+	jti := uuid.New().String()
 	claims := &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.refreshTokenExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "security-service",
@@ -61,7 +71,11 @@ func (m *JWTManager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(m.secretKey)
+	signed, err := token.SignedString(m.secretKey)
+	if err != nil {
+		return "", "", err
+	}
+	return signed, jti, nil
 }
 
 func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {

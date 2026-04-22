@@ -4,12 +4,13 @@ import (
 	"strings"
 
 	"security-service/internal/security"
+	"security-service/internal/store"
 	"security-service/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-func JWTAuth(jwtManager *security.JWTManager) gin.HandlerFunc {
+func JWTAuth(jwtManager *security.JWTManager, blacklist *store.TokenBlacklist) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -30,6 +31,16 @@ func JWTAuth(jwtManager *security.JWTManager) gin.HandlerFunc {
 			response.Unauthorized(c, "invalid or expired token")
 			c.Abort()
 			return
+		}
+
+		// Check jti against Redis blacklist
+		if claims.ID != "" {
+			blacklisted, err := blacklist.IsBlacklisted(c.Request.Context(), claims.ID)
+			if err != nil || blacklisted {
+				response.Unauthorized(c, "token has been revoked")
+				c.Abort()
+				return
+			}
 		}
 
 		c.Set("user_id", claims.UserID.String())
