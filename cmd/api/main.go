@@ -3,7 +3,9 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
+	"security-service/internal/audit"
 	"security-service/internal/auth"
 	"security-service/internal/middleware"
 	"security-service/internal/rbac"
@@ -33,6 +35,7 @@ func main() {
 		&rbac.Role{},
 		&rbac.Permission{},
 		&rbac.UserRole{},
+		&audit.Log{},
 	); err != nil {
 		log.Fatalf("failed to migrate: %v", err)
 	}
@@ -46,15 +49,18 @@ func main() {
 	userRepo := user.NewRepository(db)
 	authService := auth.NewService(userRepo, jwtManager, blacklist)
 	rbacService := rbac.NewService(db, rdb)
+	auditService := audit.NewService(db)
 
 	// Handlers
 	authHandler := auth.NewHandler(authService)
 	userHandler := user.NewHandler(userRepo)
 	rbacHandler := rbac.NewHandler(rbacService)
+	auditHandler := audit.NewHandler(auditService)
 
 	r := gin.Default()
 
 	// Global middleware
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.Cors())
 	r.Use(middleware.RequestID())
 
@@ -64,21 +70,34 @@ func main() {
 	})
 
 	api := r.Group("/api/v1")
+	api.Use(middleware.AuditLog(auditService))
 
-	// Public routes
-	authHandler.RegisterRoutes(api)
+	// Public auth routes
+	authGroup := api.Group("/auth")
+	authGroup.POST("/register", authHandler.Register)
+	authGroup.POST("/login",
+		middleware.RateLimitByIP(rdb, 5, time.Minute),
+		authHandler.Login)
+	authGroup.POST("/refresh", authHandler.RefreshToken)
+	authGroup.POST("/logout", authHandler.Logout)
 
 	// Protected routes (JWT required)
 	protected := api.Group("")
 	protected.Use(middleware.JWTAuth(jwtManager, blacklist))
+	protected.Use(middleware.RateLimitByUser(rdb, 30, time.Minute))
 
 	// User routes
 	userHandler.RegisterRoutes(protected)
 
-	// RBAC admin routes (require role:manage permission)
+	// RBAC admin routes (require role:manage)
 	adminRBAC := protected.Group("")
 	adminRBAC.Use(middleware.RequirePermission(rbacService, "role:manage"))
 	rbacHandler.RegisterRoutes(adminRBAC)
+
+	// Audit log routes (require log:read — admin + auditor)
+	auditGroup := protected.Group("")
+	auditGroup.Use(middleware.RequirePermission(rbacService, "log:read"))
+	auditHandler.RegisterRoutes(auditGroup)
 
 	port := os.Getenv("PORT")
 	if port == "" {
