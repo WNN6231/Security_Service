@@ -29,6 +29,11 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request parameters")
+		return
+	}
+	req.Sanitize()
+	if err := req.Validate(); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
@@ -45,13 +50,18 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request parameters")
+		return
+	}
+	req.Sanitize()
+	if err := req.Validate(); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
 	tokens, err := h.service.Login(c.Request.Context(), &req)
 	if err != nil {
-		response.Unauthorized(c, err.Error())
+		response.Unauthorized(c, "invalid credentials")
 		return
 	}
 
@@ -61,13 +71,13 @@ func (h *Handler) Login(c *gin.Context) {
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "invalid request parameters")
 		return
 	}
 
 	tokens, err := h.service.RefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
-		response.Unauthorized(c, err.Error())
+		response.Unauthorized(c, "invalid or expired refresh token")
 		return
 	}
 
@@ -77,7 +87,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 func (h *Handler) Logout(c *gin.Context) {
 	token := c.GetHeader("Authorization")
 	if err := h.service.Logout(c.Request.Context(), token); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Unauthorized(c, "invalid token")
 		return
 	}
 

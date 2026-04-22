@@ -46,7 +46,7 @@ func (h *Handler) GetUser(c *gin.Context) {
 func (h *Handler) ListUsers(c *gin.Context) {
 	users, total, err := h.repo.List(c.Request.Context(), 0, 20)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -67,12 +67,12 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(u); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "invalid request parameters")
 		return
 	}
 
 	if err := h.repo.Update(c.Request.Context(), u); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 

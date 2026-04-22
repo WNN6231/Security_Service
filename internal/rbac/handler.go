@@ -2,7 +2,9 @@ package rbac
 
 import (
 	"net/http"
+	"strings"
 
+	"security-service/internal/validator"
 	"security-service/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +31,7 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 // ---------- DTOs ----------
 
 type CreateRoleRequest struct {
-	Name        string   `json:"name" binding:"required,min=2,max=50"`
+	Name        string   `json:"name" binding:"required"`
 	Description string   `json:"description"`
 	Permissions []string `json:"permissions"`
 }
@@ -43,13 +45,24 @@ type AssignRoleRequest struct {
 func (h *Handler) CreateRole(c *gin.Context) {
 	var req CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "invalid request parameters")
+		return
+	}
+
+	req.Name = validator.SanitizeString(req.Name)
+	req.Description = validator.SanitizeString(req.Description)
+	for i := range req.Permissions {
+		req.Permissions[i] = strings.TrimSpace(req.Permissions[i])
+	}
+
+	if validator.IsBlank(req.Name) || len(req.Name) < 2 || len(req.Name) > 50 {
+		response.BadRequest(c, "role name must be 2-50 characters")
 		return
 	}
 
 	role, err := h.service.CreateRole(c.Request.Context(), req.Name, req.Description, req.Permissions)
 	if err != nil {
-		response.Error(c, http.StatusConflict, err.Error())
+		response.Error(c, http.StatusConflict, "role already exists or invalid permissions")
 		return
 	}
 
@@ -59,7 +72,7 @@ func (h *Handler) CreateRole(c *gin.Context) {
 func (h *Handler) ListRoles(c *gin.Context) {
 	roles, err := h.service.ListRoles(c.Request.Context())
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "failed to list roles")
+		response.Error(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -75,14 +88,14 @@ func (h *Handler) AssignRole(c *gin.Context) {
 
 	var req AssignRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "invalid request parameters")
 		return
 	}
 
-	roleID, _ := uuid.Parse(req.RoleID) // already validated by binding
+	roleID, _ := uuid.Parse(req.RoleID)
 
 	if err := h.service.AssignRoleToUser(c.Request.Context(), userID, roleID); err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.BadRequest(c, "role not found or already assigned")
 		return
 	}
 

@@ -7,12 +7,12 @@ import (
 )
 
 type APIResponse struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
-func OK(c *gin.Context, data interface{}) {
+func OK(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, APIResponse{
 		Code:    http.StatusOK,
 		Message: "success",
@@ -20,7 +20,7 @@ func OK(c *gin.Context, data interface{}) {
 	})
 }
 
-func Created(c *gin.Context, data interface{}) {
+func Created(c *gin.Context, data any) {
 	c.JSON(http.StatusCreated, APIResponse{
 		Code:    http.StatusCreated,
 		Message: "created",
@@ -56,7 +56,13 @@ func NotFound(c *gin.Context, message string) {
 	})
 }
 
+// Error writes an error response. For 5xx status codes the caller's message
+// is replaced with a generic string so that stack traces and internal details
+// are never leaked to the client.
 func Error(c *gin.Context, code int, message string) {
+	if code >= 500 {
+		message = "internal server error"
+	}
 	c.JSON(code, APIResponse{
 		Code:    code,
 		Message: message,
