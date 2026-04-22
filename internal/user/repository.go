@@ -31,20 +31,26 @@ func (r *repository) Create(ctx context.Context, user *User) error {
 
 func (r *repository) FindByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
-	err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error
-	return &user, err
+	if err := r.db.WithContext(ctx).First(&user, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *repository) FindByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
-	err := r.db.WithContext(ctx).First(&user, "email = ?", email).Error
-	return &user, err
+	if err := r.db.WithContext(ctx).First(&user, "email = ?", email).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *repository) FindByUsername(ctx context.Context, username string) (*User, error) {
 	var user User
-	err := r.db.WithContext(ctx).First(&user, "username = ?", username).Error
-	return &user, err
+	if err := r.db.WithContext(ctx).First(&user, "username = ?", username).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *repository) Update(ctx context.Context, user *User) error {

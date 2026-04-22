@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"net/http"
-
 	"security-service/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +38,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	user, err := h.service.Register(c.Request.Context(), &req)
 	if err != nil {
-		response.Error(c, http.StatusConflict, err.Error())
+		response.BadRequest(c, err.Error())
 		return
 	}
 
