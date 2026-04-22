@@ -4,8 +4,12 @@ import (
 	"log"
 	"os"
 
+	"security-service/internal/auth"
 	"security-service/internal/middleware"
+	"security-service/internal/rbac"
+	"security-service/internal/security"
 	"security-service/internal/store"
+	"security-service/internal/user"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,8 +27,30 @@ func main() {
 		log.Fatalf("failed to connect redis: %v", err)
 	}
 
-	_ = db
-	_ = rdb
+	// Auto-migrate
+	if err := db.AutoMigrate(
+		&user.User{},
+		&rbac.Role{},
+		&rbac.Permission{},
+		&rbac.UserRole{},
+	); err != nil {
+		log.Fatalf("failed to migrate: %v", err)
+	}
+
+	// Seed RBAC data
+	rbac.Seed(db)
+
+	// Services
+	jwtManager := security.NewJWTManager()
+	blacklist := store.NewTokenBlacklist(rdb)
+	userRepo := user.NewRepository(db)
+	authService := auth.NewService(userRepo, jwtManager, blacklist)
+	rbacService := rbac.NewService(db, rdb)
+
+	// Handlers
+	authHandler := auth.NewHandler(authService)
+	userHandler := user.NewHandler(userRepo)
+	rbacHandler := rbac.NewHandler(rbacService)
 
 	r := gin.Default()
 
@@ -37,8 +63,22 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// TODO: Register route groups here
-	// api := r.Group("/api/v1")
+	api := r.Group("/api/v1")
+
+	// Public routes
+	authHandler.RegisterRoutes(api)
+
+	// Protected routes (JWT required)
+	protected := api.Group("")
+	protected.Use(middleware.JWTAuth(jwtManager, blacklist))
+
+	// User routes
+	userHandler.RegisterRoutes(protected)
+
+	// RBAC admin routes (require role:manage permission)
+	adminRBAC := protected.Group("")
+	adminRBAC.Use(middleware.RequirePermission(rbacService, "role:manage"))
+	rbacHandler.RegisterRoutes(adminRBAC)
 
 	port := os.Getenv("PORT")
 	if port == "" {

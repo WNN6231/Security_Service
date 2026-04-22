@@ -16,15 +16,16 @@ type Role struct {
 }
 
 type Permission struct {
-	ID       uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Resource string    `json:"resource" gorm:"size:100;not null"`
-	Action   string    `json:"action" gorm:"size:50;not null"`
+	ID   uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Code string    `json:"code" gorm:"uniqueIndex;size:100;not null"`
 }
 
-func (Permission) TableName() string {
-	return "permissions"
+type UserRole struct {
+	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;primaryKey"`
+	RoleID    uuid.UUID `json:"role_id" gorm:"type:uuid;primaryKey"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
-func (Role) TableName() string {
-	return "roles"
-}
+func (Role) TableName() string       { return "roles" }
+func (Permission) TableName() string { return "permissions" }
+func (UserRole) TableName() string   { return "user_roles" }
